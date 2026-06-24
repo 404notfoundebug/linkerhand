@@ -31,6 +31,7 @@ from PyQt5.QtCore import QThread, QTimer, Qt, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QGridLayout,
     QGroupBox,
@@ -305,46 +306,6 @@ REHAB_ACTION_CONFIGS = [
         "hit_threshold": 78.0,
         "reset_threshold": 58.0,
         "hold_frames": 5,
-    },
-    {
-        "name": "拇指对食指训练",
-        "fingers": ["thumb", "index"],
-        "ratio": 0.75,
-        "target_finger_scores": {"thumb": 75, "index": 75, "middle": 0, "ring": 0, "pinky": 0},
-        "description": "训练拇指与食指精细配合能力",
-        "hit_threshold": 75.0,
-        "reset_threshold": 55.0,
-        "hold_frames": 4,
-    },
-    {
-        "name": "两指捏合训练",
-        "fingers": ["thumb", "index"],
-        "ratio": 0.9,
-        "target_finger_scores": {"thumb": 90, "index": 90, "middle": 0, "ring": 0, "pinky": 0},
-        "description": "训练两指捏取能力",
-        "hit_threshold": 75.0,
-        "reset_threshold": 55.0,
-        "hold_frames": 4,
-    },
-    {
-        "name": "食指点击训练",
-        "fingers": ["index"],
-        "ratio": 1.0,
-        "target_finger_scores": {"thumb": 0, "index": 100, "middle": 0, "ring": 0, "pinky": 0},
-        "description": "训练单指伸展与点击能力",
-        "hit_threshold": 75.0,
-        "reset_threshold": 50.0,
-        "hold_frames": 3,
-    },
-    {
-        "name": "五指依次弯曲训练",
-        "fingers": ["thumb", "index", "middle", "ring", "little"],
-        "ratio": 0.65,
-        "target_finger_scores": {"thumb": 65, "index": 65, "middle": 65, "ring": 65, "pinky": 65},
-        "description": "训练手指独立控制能力",
-        "hit_threshold": 70.0,
-        "reset_threshold": 50.0,
-        "hold_frames": 4,
     },
 ]
 
@@ -625,7 +586,7 @@ class LinkerHandController:
 class VisionControlWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Linker Hand 视觉交互控制")
+        self.setWindowTitle("基于视觉感知的手功能康复训练辅助系统")
         self.resize(1280, 760)
 
         self.controller = LinkerHandController()
@@ -670,7 +631,7 @@ class VisionControlWindow(QMainWindow):
         vision_root = QHBoxLayout(vision_page)
         vision_root.setContentsMargins(0, 0, 0, 0)
         vision_root.setSpacing(12)
-        self.tabs.addTab(vision_page, "视觉控制")
+        self.tabs.addTab(vision_page, "视觉设置")
 
         self.video_label = QLabel("摄像头画面")
         self.video_label.setAlignment(Qt.AlignCenter)
@@ -690,11 +651,13 @@ class VisionControlWindow(QMainWindow):
 
         self.connect_btn = QPushButton("连接机械手")
         self.disconnect_btn = QPushButton("断开连接")
-        self.start_btn = QPushButton("开始视觉控制")
-        self.stop_btn = QPushButton("停止视觉控制")
+        self.start_btn = QPushButton("启动视觉预览")
+        self.stop_btn = QPushButton("停止视觉预览")
         self.open_btn = QPushButton("张开手")
         self.fist_btn = QPushButton("握拳")
         self.estop_btn = QPushButton("急停/停止发送")
+        self.follow_control_check = QCheckBox("启用机械手实时跟随控制")
+        self.follow_control_check.setChecked(False)
 
         control_layout.addWidget(self.connect_btn, 0, 0)
         control_layout.addWidget(self.disconnect_btn, 0, 1)
@@ -703,13 +666,14 @@ class VisionControlWindow(QMainWindow):
         control_layout.addWidget(self.open_btn, 2, 0)
         control_layout.addWidget(self.fist_btn, 2, 1)
         control_layout.addWidget(self.estop_btn, 3, 0, 1, 2)
+        control_layout.addWidget(self.follow_control_check, 4, 0, 1, 2)
 
         self.camera_spin = QSpinBox()
         self.camera_spin.setRange(0, 10)
         self.camera_spin.setValue(0)
 
-        control_layout.addWidget(QLabel("摄像头编号"), 4, 0)
-        control_layout.addWidget(self.camera_spin, 4, 1)
+        control_layout.addWidget(QLabel("摄像头编号"), 5, 0)
+        control_layout.addWidget(self.camera_spin, 5, 1)
 
         filter_group = QGroupBox("实时滤波调节")
         filter_layout = QGridLayout(filter_group)
@@ -748,6 +712,8 @@ class VisionControlWindow(QMainWindow):
         self.fps_label = QLabel("0.0")
         self.pose_label = QLabel("[]")
         self.pose_label.setWordWrap(True)
+        self.vision_finger_scores_label = QLabel("-")
+        self.vision_finger_scores_label.setWordWrap(True)
 
         status_layout.addWidget(QLabel("SDK连接状态"), 0, 0)
         status_layout.addWidget(self.sdk_status_label, 0, 1)
@@ -761,12 +727,14 @@ class VisionControlWindow(QMainWindow):
         status_layout.addWidget(self.fps_label, 4, 1)
         status_layout.addWidget(QLabel("控制数组"), 5, 0, Qt.AlignTop)
         status_layout.addWidget(self.pose_label, 5, 1)
+        status_layout.addWidget(QLabel("五指活动度"), 6, 0, Qt.AlignTop)
+        status_layout.addWidget(self.vision_finger_scores_label, 6, 1)
 
         rehab_page = QWidget()
         rehab_root = QHBoxLayout(rehab_page)
         rehab_root.setContentsMargins(0, 0, 0, 0)
         rehab_root.setSpacing(12)
-        self.tabs.addTab(rehab_page, "康复训练")
+        self.tabs.insertTab(0, rehab_page, "康复训练")
 
         self.rehab_video_label = QLabel("摄像头画面")
         self.rehab_video_label.setAlignment(Qt.AlignCenter)
@@ -866,6 +834,7 @@ class VisionControlWindow(QMainWindow):
         self.log_edit.setMinimumHeight(140)
         log_layout.addWidget(self.log_edit)
         root.addWidget(log_group)
+        self.tabs.setCurrentIndex(0)
 
     def _connect_signals(self) -> None:
         self.connect_btn.clicked.connect(self.connect_hand)
@@ -1067,7 +1036,8 @@ class VisionControlWindow(QMainWindow):
             self.stop_rehab_training("视觉识别启动失败，训练未开始", auto_save=False)
             return
 
-        self.enable_robot_control = self.controller.connected
+        follow_enabled = self.follow_control_check.isChecked() if hasattr(self, "follow_control_check") else False
+        self.enable_robot_control = self.controller.connected and (self.is_training or follow_enabled)
         self.controller.sending_enabled = self.enable_robot_control
         self.pause_rehab_btn.setText("暂停训练")
         self._set_mode("训练中")
@@ -1402,9 +1372,11 @@ class VisionControlWindow(QMainWindow):
         self.worker.finished.connect(self.on_worker_finished)
         self.worker.start()
 
-        self._set_mode("视觉控制中" if self.controller.connected else "视觉识别中")
-        if self.controller.connected:
-            self._log("视觉控制已开始，检测到手后会调用 finger_move()")
+        self._set_mode("视觉识别中")
+        if self.enable_robot_control:
+            self._log("视觉识别已开始，机械手实时跟随控制已启用")
+        elif self.controller.connected:
+            self._log("视觉预览已开始；机械手实时跟随控制未启用")
         else:
             self._log("视觉识别已开始；未连接机械手，仅进行康复评分与记录")
         self._update_state()
@@ -1422,7 +1394,7 @@ class VisionControlWindow(QMainWindow):
             self.worker = None
         if self.controller.connected:
             self._set_mode("已停止")
-        self._log("视觉控制已停止，实时发送已关闭")
+        self._log("视觉预览已停止，实时发送已关闭")
         self._update_state()
 
     @pyqtSlot()
@@ -1511,6 +1483,7 @@ class VisionControlWindow(QMainWindow):
             finger_scores = self.finger_scores_from_curls(self.current_curls)
             self.current_finger_scores = dict(finger_scores)
             self.current_finger_scores_label.setText(self.format_finger_scores(finger_scores))
+            self.vision_finger_scores_label.setText(self.format_finger_scores(finger_scores))
             self.update_finger_bars(finger_scores)
             action = self.current_rehab_action()
             completion = 0.0
@@ -1554,6 +1527,7 @@ class VisionControlWindow(QMainWindow):
             self.current_curls = {}
             self.current_finger_scores = {}
             self.current_finger_scores_label.setText("未检测到手")
+            self.vision_finger_scores_label.setText("未检测到手")
             self.update_finger_bars({"thumb": 0, "index": 0, "middle": 0, "ring": 0, "little": 0})
             result = self.rehab_trainer.update(None, {})
             self.rehab_state_label.setText(self.rehab_state_text(str(result["state"])))
